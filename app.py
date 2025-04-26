@@ -5,6 +5,7 @@ from dash import html
 from dash.dependencies import Input, Output, State
 import plotly.express as px
 from dash import callback_context
+from dash import html
 
 # Simplified data
 data = {
@@ -57,57 +58,63 @@ app.layout = html.Div(
                 )
             ]
         ),
+        # Hidden div to store the index of the selected location
+        html.Div(id='selected-index', style={'display': 'none'})
     ]
 )
 
 @app.callback(
-    Output('location-map', 'figure', allow_duplicate=True),
-    Output('card-list', 'children', allow_duplicate=True),
+    Output('location-map', 'figure'),
+    Output('selected-index', 'children'),
     Input({'type': 'location-card', 'index': dash.ALL}, 'n_clicks'),
     State('location-map', 'figure'),
-    State('card-list', 'children'),
     State({'type': 'location-card', 'index': dash.ALL}, 'id'),
     prevent_initial_call=True
 )
-def update_map_on_card_click(n_clicks, current_figure, current_cards, card_ids):
+def update_map_on_card_click(n_clicks, current_figure, card_ids):
     print("update_map_on_card_click CALLED")
     ctx = callback_context
     if ctx.triggered_id:
         clicked_index = int(ctx.triggered_id['index'])
         clicked_row = df.iloc[clicked_index]
         updated_figure = dict(current_figure)
-        updated_figure['layout']['map']['center'] = {
+        updated_figure['layout']['mapbox']['center'] = {
             'lat': clicked_row['latitude'],
             'lon': clicked_row['longitude']
         }
+        updated_figure['data'][0]['marker']['color'] = ['blue'] * len(df)
+        updated_figure['data'][0]['marker']['color'][clicked_index] = 'red'
 
-        # Update card highlighting
+        print(f"Clicked card index: {clicked_index}, Centering on: {clicked_row['location']}")
+        return updated_figure, clicked_index
+    return current_figure, dash.no_update
+
+@app.callback(
+    Output('card-list', 'children'),
+    Input('selected-index', 'children'),
+    State('card-list', 'children')
+)
+def highlight_card(selected_index, current_cards):
+    if selected_index is not None:
         updated_cards_list = []
         for i, card in enumerate(current_cards):
             new_card = dict(card)
             default_style = {'marginBottom': '10px', 'border': '1px solid #ddd', 'padding': '10px'}
             new_card['props']['style'] = default_style
-            if i == clicked_index:
+            if i == int(selected_index):
                 new_card['props']['style'] = {'marginBottom': '10px', 'border': '2px solid red', 'padding': '10px'}
             updated_cards_list.append(new_card)
-
-        # Update map marker color
-        updated_figure['data'][0]['marker']['color'] = ['blue'] * len(df)
-        updated_figure['data'][0]['marker']['color'][clicked_index] = 'red'
-
-        print(f"Clicked card index: {clicked_index}, Centering on: {clicked_row['location']}")
-        return updated_figure, updated_cards_list
-    return current_figure, current_cards
+        return updated_cards_list
+    return current_cards
 
 @app.callback(
-    Output('card-list', 'children', allow_duplicate=True),
+    Output('selected-index', 'children', allow_duplicate=True),
     Output('location-map', 'figure', allow_duplicate=True),
     Input('location-map', 'clickData'),
-    State('card-list', 'children'),
     State('location-map', 'figure'),
     prevent_initial_call=True
 )
-def update_cards_on_map_click(click_data, current_cards, current_figure):
+def update_cards_on_map_click(click_data, current_figure):
     print("update_cards_on_map_click CALLED")
     if click_data:
         clicked_lat = click_data['points'][0]['lat']
@@ -118,27 +125,16 @@ def update_cards_on_map_click(click_data, current_cards, current_figure):
                 (df['longitude'].round(4) == round(clicked_lon, 4))
             ].index[0]
 
-            # Update card highlighting
-            updated_cards_list = []
-            for i, card in enumerate(current_cards):
-                new_card = dict(card)
-                default_style = {'marginBottom': '10px', 'border': '1px solid #ddd', 'padding': '10px'}
-                new_card['props']['style'] = default_style
-                if i == clicked_index:
-                    new_card['props']['style'] = {'marginBottom': '10px', 'border': '2px solid red', 'padding': '10px'}
-                updated_cards_list.append(new_card)
-
-            # Update map marker color
             updated_figure_map_click = dict(current_figure)
             updated_figure_map_click['data'][0]['marker']['color'] = ['blue'] * len(df)
             updated_figure_map_click['data'][0]['marker']['color'][clicked_index] = 'red'
 
             print(f"Clicked map at: {clicked_lat}, {clicked_lon}, Highlighting card index: {clicked_index}")
-            return updated_cards_list, updated_figure_map_click
+            return clicked_index, updated_figure_map_click
         except IndexError:
             print("No location found at clicked coordinates.")
-            return current_cards, current_figure
-    return current_cards, current_figure
+            return dash.no_update, current_figure
+    return dash.no_update, current_figure
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080)
