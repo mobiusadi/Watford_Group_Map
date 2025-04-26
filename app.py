@@ -45,7 +45,7 @@ app.layout = html.Div(
             children=[
                 dcc.Graph(
                     id='location-map',
-                    figure=px.scatter_mapbox(
+                    figure=px.scatter_map(
                         df,
                         lat="latitude",
                         lon="longitude",
@@ -76,7 +76,7 @@ def update_map_on_card_click(n_clicks, current_figure, current_cards, card_ids):
         clicked_index = int(ctx.triggered_id['index'])
         clicked_row = df.iloc[clicked_index]
         updated_figure = dict(current_figure)
-        updated_figure['layout']['mapbox']['center'] = {
+        updated_figure['layout']['map']['center'] = {
             'lat': clicked_row['latitude'],
             'lon': clicked_row['longitude']
         }
